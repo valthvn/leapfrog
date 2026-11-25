@@ -1,0 +1,105 @@
+plugins {
+    id 'fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+repositories {
+    maven { url = 'https://repo.viaversion.com' }
+    maven { url = 'https://maven.terraformersmc.com/releases' }
+    exclusiveContent {
+        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    // Optional: settings button in Mod Menu.
+    modCompileOnly "com.terraformersmc:modmenu:17.0.1"
+
+    // ViaFabric, ViaVersion and ViaBackwards are required at runtime; players install them from Modrinth.
+    compileOnly "com.viaversion:viaversion-api:${project.via_version}"
+    compileOnly "com.viaversion:viaversion-common:${project.via_version}"
+    compileOnly "com.viaversion:viabackwards-common:${project.via_version}"
+
+
+    // Compatibility run with a real player's mod set (jars copied into build/compatMods): `-Pcompat_test`.
+    if (project.hasProperty('compat_test')) {
+        modLocalRuntime fileTree(layout.buildDirectory.dir('compatMods')) { include '*.jar' }
+    }
+
+    // Leapfrog requires ViaFabric and ViaBackwards, so the dev and test clients load them too.
+    // Loom does not load ViaFabric's nested per-version sub-mods in dev: unpack them ourselves.
+    def viafabricJar = configurations.detachedConfiguration(dependencies.create("maven.modrinth:viafabric:${project.viafabric_version}")).singleFile
+    def nestedDir = layout.buildDirectory.dir('viaTestMods').get().asFile
+    nestedDir.mkdirs()
+    new java.util.zip.ZipFile(viafabricJar).withCloseable { z ->
+        z.entries().findAll { it.name.startsWith('META-INF/jars/') && it.name.contains('mc12111') }.each { e ->
+            def f = new File(nestedDir, e.name.substring('META-INF/jars/'.length()))
+            if (!f.exists()) z.getInputStream(e).withCloseable { i -> f.withOutputStream { o -> o << i } }
+        }
+    }
+    modLocalRuntime "maven.modrinth:viafabric:${project.viafabric_version}"
+    modLocalRuntime fileTree(nestedDir) { include '*.jar' }
+    modLocalRuntime("com.viaversion:viaversion:${project.via_version}") { transitive = false }
+    modLocalRuntime("com.viaversion:viabackwards:${project.via_version}") { transitive = false }
+}
+
+loom {
+    accessWidenerPath = file('src/main/resources/leapfrog.accesswidener')
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand 'version': project.version }
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+    withSourcesJar()
+}
+
+jar {
+    from('LICENSE') { rename { 'LICENSE_leapfrog' } }
+}
+
+tasks.withType(JavaCompile).configureEach { it.options.release = 21 }
+
+// The 26.x textures, models and sounds are not in the jar: the mod downloads them from Mojang at
+// first launch (see dev.leapfrog.assets.FutureAssets).
+
+// In-game verification: `gradlew runClientGameTest` boots the client, summons ViaBackwards-style
+// stand-ins and saves screenshots to build/run/clientGameTest/screenshots.
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "leapfrog-test"
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+// ViaFabric rewrites packets below the gametest network synchroniser, which must be off for the remote test.
+if (project.hasProperty('via_test')) {
+    tasks.matching { it.name == 'runClientGameTest' }.configureEach {
+        jvmArgs '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+    }
+}
+
+// Real (non-dev) client with the built jar in mods/.
+// With -PinstanceMods=<a mods folder>, every other jar of that folder is added (real player setup).
+tasks.register('runProductionClient', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    mods.from(tasks.named('remapJar').flatMap { it.archiveFile })
+    if (project.hasProperty('instanceMods')) {
+        mods.from(fileTree(project.property('instanceMods')) { include '*.jar'; exclude { it.name ==~ /leapfrog-\d.*\.jar/ } })
+    }
+}
+

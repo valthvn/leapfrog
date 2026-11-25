@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "leapfrog",
+  "version": "${version}",
+  "name": "Leapfrog",
+  "description": "Client-side visual restoration of 26.x content (cushions, wool/concrete stairs & slabs, new blocks and items) when playing on a 26.x server from a 1.21.11 client through ViaBackwards.",
+  "authors": ["AiyzoxX"],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/leapfrog"
+  },
+  "license": "MIT",
+  "icon": "assets/leapfrog/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "main": ["dev.leapfrog.LeapfrogMain"],
+    "client": ["dev.leapfrog.Leapfrog"],
+    "modmenu": ["dev.leapfrog.ui.ModMenuEntry"]
+  },
+  "mixins": ["leapfrog.mixins.json"],
+  "accessWidener": "leapfrog.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "minecraft": "~1.21.11",
+    "fabric-api": "*",
+    "viafabric": "*",
+    "viabackwards": ">=5.12.2"
+  }
+}
