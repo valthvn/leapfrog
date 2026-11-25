@@ -184,7 +184,6 @@ public class RemoteAuditTest implements FabricClientGameTest {
         check("blocks: creative break of a restored block", client.equals("minecraft:air") && server.contains("passed"), client + " / " + server);
     }
 
-    /** Survival mining: the client predicts the break time from the block hardness; it must match the server. */
     /**
      * Survival mining: the client predicts the break time from hardness and tool rules. It must match the
      * 26.3 value, and the server must already have broken the block when the client shows it broken
